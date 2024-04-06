@@ -12,7 +12,9 @@ import torch
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 
-from load_lsst_data import load_lsst_data_npy2
+from torchsummary import summary
+
+from load_lsst_data import load_lsst_data_npy_half
 
 from AstronomyTransformer import AstronomyTransformer
 
@@ -42,13 +44,13 @@ class dataset_class(Dataset):
 
 
 # Load Training Data
-data_name1 = 'Dataset/LSST/training_set_gp_all'
-data_name2 = 'Dataset/LSST/test_set_batch1_gp_all'
-X_train, y_train, X_val, y_val = load_lsst_data_npy2(data_name1, data_name2, data_scale=False, data_norm=False, val_ratio=0.2)
+data_type='detected'
+X_train, y_train, X_val, y_val = load_lsst_data_npy_half(data_type=data_type, data_scale=False, data_norm=False, val_ratio=0.2)
 
 
 # balance training data
-rate_factor = 1.0 / 28
+rate_factor = 1.0 / 28 / 30
+
 X_train_new = X_train.copy()
 y_train_new = y_train.copy()
 NN = int(len(y_train) * rate_factor)
@@ -119,11 +121,12 @@ model = AstronomyTransformer(input_shape=input_shape, embedding_size=32, heads_n
 
 model.to(device)
 
+summary(model, input_shape)
 
 # Training
-epochs = 50
+epochs = 5 #20
 batch_size = 32
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
 best_epoch_loss = 100000
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
@@ -134,8 +137,8 @@ epoch_loss_pre = 100000
 epoch_loss_cnt = 0
 for epoch in range(epochs):
     # Training
-    epoch_loss = 0
-    total_samples = 0
+    epoch_loss = 0  # total loss of epoch
+    total_samples = 0  # total samples in epoch
     model.train()
     for i, batch in enumerate(train_loader):
         X, targets, IDs = batch
@@ -143,7 +146,7 @@ for epoch in range(epochs):
 
         targets = targets.type(torch.LongTensor)
         targets = targets.to(device)
-        loss = F.cross_entropy(predictions, targets)
+        loss = F.cross_entropy(predictions, targets)  # (batch_size,) loss for each sample in the batch
 
         # Zero gradients, perform a backward pass, and update the weights.
         optimizer.zero_grad()
@@ -154,13 +157,13 @@ for epoch in range(epochs):
 
         with torch.no_grad():
             total_samples += len(targets)
-            epoch_loss += (len(targets) * loss)
+            epoch_loss += (len(targets) * loss)  # add total loss of batch
 
-    epoch_loss_train = epoch_loss / total_samples
+    epoch_loss_train = epoch_loss / total_samples  # average loss per sample for whole epoch
 
     # Evalue
-    epoch_loss = 0
-    total_samples = 0
+    epoch_loss = 0  # total loss of epoch
+    total_samples = 0  # total samples in epoch
     model.eval()
     per_batch = {'targets': [], 'predictions': [], 'metrics': [], 'IDs': []}
     for i, batch in enumerate(val_loader):
@@ -169,7 +172,7 @@ for epoch in range(epochs):
         
         targets = targets.type(torch.LongTensor)
         targets = targets.to(device)
-        loss = F.cross_entropy(predictions, targets)
+        loss = F.cross_entropy(predictions, targets)  # (batch_size,) loss for each sample in the batch
 
         per_batch['targets'].append(targets.cpu().numpy())
         predictions = predictions.detach()
@@ -180,13 +183,13 @@ for epoch in range(epochs):
 
         metrics = {"loss": loss}
         total_samples += len(targets)
-        epoch_loss += (len(targets) * loss)
+        epoch_loss += (len(targets) * loss)  # add total loss of batch
 
-    epoch_loss_val = epoch_loss / total_samples
+    epoch_loss_val = epoch_loss / total_samples  # average loss per element for whole epoch
 
     predictions = torch.from_numpy(np.concatenate(per_batch['predictions'], axis=0))
-    probs = torch.nn.functional.softmax(predictions, dim=1)
-    predictions = torch.argmax(probs, dim=1).cpu().numpy()
+    probs = torch.nn.functional.softmax(predictions, dim=1)  # (total_samples, num_classes) est. prob. for each class and sample
+    predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
     probs = probs.cpu().numpy()
     targets = np.concatenate(per_batch['targets'], axis=0).flatten()
     

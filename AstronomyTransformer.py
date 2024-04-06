@@ -8,6 +8,7 @@ Created on Sat Jan 20 09:28:40 2024
 import torch
 from torch import nn
 import numpy as np
+from einops import rearrange
 
 
 class PositionalEncoding(nn.Module):
@@ -91,6 +92,12 @@ class AstronomyTransformer(nn.Module):
 
         self.EncoderBlock1 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
         self.EncoderBlock2 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        self.EncoderBlock3 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        self.EncoderBlock4 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        self.EncoderBlock5 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        self.EncoderBlock6 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        # self.EncoderBlock7 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
+        # self.EncoderBlock8 = EncoderBlock(embedding_size, heads_num, fnn_num, dropout)
         
         self.gap = nn.AdaptiveAvgPool1d(1)
         self.flatten = nn.Flatten()
@@ -102,10 +109,15 @@ class AstronomyTransformer(nn.Module):
         
         x = self.EncoderBlock1(x)
         x = self.EncoderBlock2(x)
+        x = self.EncoderBlock3(x)
+        x = self.EncoderBlock4(x)
+        x = self.EncoderBlock5(x)
+        x = self.EncoderBlock6(x)
+        # x = self.EncoderBlock7(x)
+        # x = self.EncoderBlock8(x)
         
         x = x.permute(0, 2, 1)
         x = self.gap(x)
         x = self.flatten(x)
         out = self.out(x)
         return out
-
